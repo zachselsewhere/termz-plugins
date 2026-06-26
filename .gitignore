@@ -1,0 +1,7 @@
+# Never commit a private signing key. The PUBLIC key (keys/termz-official.pub)
+# IS committed for verification.
+keys/*-signing-key.pem
+*.pem
+!keys/*.pub
+.DS_Store
+node_modules

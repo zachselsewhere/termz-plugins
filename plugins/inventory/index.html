@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Inventory true-up</title>
+    <style>
+      /* Colors come from the host via the theme bridge (--tz-* vars set on
+         :root). Fallbacks match the default dark theme so there's no flash
+         before the tokens arrive. Semantic diff colors are fixed hues that
+         read well on dark. */
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        font: 13px system-ui, sans-serif;
+        color: var(--tz-text, #e6e6e6);
+        background: var(--tz-bg, #1b1b1d);
+        padding: 12px;
+      }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 4px;
+      }
+      .sub {
+        color: var(--tz-text-muted, #9a9a9a);
+        margin: 0 0 12px;
+      }
+      .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      input[type="file"] {
+        color: var(--tz-text-muted, #9a9a9a);
+        font: inherit;
+        max-width: 100%;
+      }
+      label.cb {
+        color: var(--tz-text-muted, #9a9a9a);
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .status {
+        color: var(--tz-text-muted, #9a9a9a);
+        min-height: 16px;
+      }
+      .err {
+        color: #e2706e;
+      }
+      .chips {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin: 8px 0;
+      }
+      .chip {
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        border: 1px solid var(--tz-border, #333);
+        color: var(--tz-text-muted, #9a9a9a);
+      }
+      .chip b {
+        font-weight: 600;
+      }
+      .chip.add {
+        background: rgba(78, 201, 142, 0.12);
+        border-color: rgba(78, 201, 142, 0.4);
+        color: #4ec98e;
+      }
+      .chip.chg {
+        background: rgba(224, 168, 78, 0.12);
+        border-color: rgba(224, 168, 78, 0.4);
+        color: #e0a84e;
+      }
+      .chip.miss {
+        background: rgba(226, 112, 110, 0.12);
+        border-color: rgba(226, 112, 110, 0.4);
+        color: #e2706e;
+      }
+      .chip.same {
+        background: transparent;
+      }
+      section {
+        margin-top: 12px;
+      }
+      section h2 {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--tz-text-muted, #9a9a9a);
+        margin: 0 0 6px;
+      }
+      .item {
+        border: 1px solid var(--tz-border, #333);
+        border-radius: 6px;
+        padding: 6px 8px;
+        margin-bottom: 4px;
+        background: var(--tz-surface, #232327);
+      }
+      .item .nm {
+        font-weight: 600;
+      }
+      .item .hostline {
+        color: var(--tz-text-muted, #9a9a9a);
+        font-family: var(--tz-font-mono, ui-monospace, monospace);
+        font-size: 12px;
+      }
+      .delta {
+        font-family: var(--tz-font-mono, ui-monospace, monospace);
+        font-size: 12px;
+        color: var(--tz-text-muted, #9a9a9a);
+      }
+      .delta .f {
+        color: #e0a84e;
+      }
+      .delta .from {
+        color: #e2706e;
+      }
+      .delta .to {
+        color: #4ec98e;
+      }
+      .renamed-tag {
+        font-size: 10px;
+        background: rgba(110, 168, 254, 0.18);
+        color: var(--tz-accent, #6ea8fe);
+        border-radius: 4px;
+        padding: 1px 5px;
+        margin-left: 6px;
+      }
+      .more {
+        color: var(--tz-text-muted, #9a9a9a);
+        font-size: 12px;
+        padding: 4px 0;
+      }
+      .sel {
+        display: block;
+        cursor: pointer;
+      }
+      .cbx {
+        margin-right: 6px;
+        vertical-align: middle;
+      }
+      .btn-apply {
+        margin-top: 14px;
+        background: var(--tz-accent, #6ea8fe);
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 8px 14px;
+        cursor: pointer;
+      }
+      .btn-apply:hover {
+        filter: brightness(1.08);
+      }
+      .confirm-bar {
+        margin-top: 14px;
+        padding: 10px;
+        background: rgba(224, 168, 78, 0.12);
+        border: 1px solid rgba(224, 168, 78, 0.4);
+        border-radius: 6px;
+      }
+      .confirm-bar b {
+        font-weight: 600;
+      }
+      .btn-confirm {
+        background: var(--tz-accent, #6ea8fe);
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 12px;
+        cursor: pointer;
+        margin-left: 8px;
+      }
+      .btn-cancel {
+        background: none;
+        border: 1px solid var(--tz-border, #333);
+        color: var(--tz-text-muted, #9a9a9a);
+        border-radius: 6px;
+        padding: 6px 12px;
+        cursor: pointer;
+        margin-left: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Inventory true-up</h1>
+    <p class="sub">Diff a CSV/JSON inventory against your saved sessions. Read-only preview.</p>
+
+    <div class="controls">
+      <div class="row">
+        <input id="file" type="file" accept=".csv,.json,text/csv,application/json" />
+      </div>
+      <label class="cb">
+        <input id="complete" type="checkbox" />
+        This file is a complete export (show missing sessions)
+      </label>
+    </div>
+
+    <div class="status" id="status"></div>
+    <div class="chips" id="chips"></div>
+    <div id="results"></div>
+    <div id="actions"></div>
+
+    <script>
+      // --- Plugin SDK shim ------------------------------------------------
+      const pending = new Map();
+      let seq = 0;
+      function applyTheme(tokens) {
+        const s = document.documentElement.style;
+        for (const k in tokens) if (tokens[k]) s.setProperty("--tz-" + k, tokens[k]);
+      }
+      window.addEventListener("message", (e) => {
+        const d = e.data;
+        if (d && d.__termzTheme && d.tokens) {
+          applyTheme(d.tokens);
+          return;
+        }
+        if (d && d.__termzPluginReply) {
+          const p = pending.get(d.reqId);
+          if (p) {
+            pending.delete(d.reqId);
+            d.ok ? p.resolve(d.result) : p.reject(new Error(d.error));
+          }
+        }
+      });
+      function invoke(capability, params) {
+        return new Promise((resolve, reject) => {
+          const reqId = ++seq;
+          pending.set(reqId, { resolve, reject });
+          parent.postMessage({ __termzPlugin: true, reqId, capability, params }, "*");
+        });
+      }
+
+      // --- Helpers --------------------------------------------------------
+      const esc = (s) =>
+        String(s == null ? "" : s).replace(
+          /[&<>"]/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+        );
+
+      function parseCSV(text) {
+        const rows = [];
+        let i = 0,
+          field = "",
+          row = [],
+          inQ = false;
+        while (i < text.length) {
+          const c = text[i];
+          if (inQ) {
+            if (c === '"') {
+              if (text[i + 1] === '"') {
+                field += '"';
+                i += 2;
+                continue;
+              }
+              inQ = false;
+              i++;
+              continue;
+            }
+            field += c;
+            i++;
+            continue;
+          }
+          if (c === '"') {
+            inQ = true;
+            i++;
+            continue;
+          }
+          if (c === ",") {
+            row.push(field);
+            field = "";
+            i++;
+            continue;
+          }
+          if (c === "\r") {
+            i++;
+            continue;
+          }
+          if (c === "\n") {
+            row.push(field);
+            rows.push(row);
+            row = [];
+            field = "";
+            i++;
+            continue;
+          }
+          field += c;
+          i++;
+        }
+        if (field.length || row.length) {
+          row.push(field);
+          rows.push(row);
+        }
+        return rows.filter((r) => r.some((c) => c.trim() !== ""));
+      }
+
+      function recordsFromCSV(text) {
+        const rows = parseCSV(text);
+        if (rows.length < 2) return [];
+        const header = rows[0].map((h) => h.trim().toLowerCase());
+        return rows.slice(1).map((r) => {
+          const o = {};
+          header.forEach((h, idx) => (o[h] = r[idx]));
+          return o;
+        });
+      }
+
+      function recordsFromJSON(text) {
+        const data = JSON.parse(text);
+        const arr = Array.isArray(data) ? data : data && data.sessions;
+        if (!Array.isArray(arr)) throw new Error("JSON must be an array or { sessions: [...] }");
+        // Lowercase keys so JSON and CSV normalize the same way.
+        return arr.map((obj) => {
+          const o = {};
+          for (const k of Object.keys(obj)) o[k.toLowerCase()] = obj[k];
+          return o;
+        });
+      }
+
+      const KIND_MAP = {
+        ssh: "ssh",
+        telnet: "telnet",
+        raw: "raw",
+        rawsocket: "raw",
+        serial: "serial",
+        local: "local",
+      };
+      const canonKind = (k) => (k == null ? null : KIND_MAP[String(k).trim().toLowerCase()] ?? null);
+      const blank = (v) => v == null || String(v).trim() === "";
+
+      // A canonical record from a raw (lowercased-key) object. Absent fields
+      // stay undefined so the diff only compares what the file actually states.
+      function normalize(o) {
+        const folder = o.folder_path ?? o.folder;
+        let tags = o.tags;
+        if (typeof tags === "string") tags = tags.split(";").map((t) => t.trim()).filter(Boolean);
+        return {
+          name: blank(o.name) ? null : String(o.name).trim(),
+          host: blank(o.host) ? undefined : String(o.host).trim(),
+          port: blank(o.port) ? undefined : Number(o.port),
+          username: blank(o.username) ? undefined : String(o.username).trim(),
+          kind: blank(o.kind) ? undefined : canonKind(o.kind),
+          folder_path: blank(folder) ? undefined : String(folder).trim(),
+          equipment_type: blank(o.equipment_type) ? undefined : String(o.equipment_type).trim(),
+          tags: Array.isArray(tags) ? tags : undefined,
+          notes: blank(o.notes) ? undefined : String(o.notes),
+          external_id: blank(o.external_id) ? undefined : String(o.external_id).trim(),
+        };
+      }
+
+      // Compare a file record against a saved session — only over fields the
+      // file actually provides.
+      const COMPARE = ["host", "port", "username", "kind"];
+      function sessionVal(s, field) {
+        if (field === "kind") return canonKind(s.kind);
+        if (field === "port") return s.port == null ? undefined : Number(s.port);
+        const v = s[field];
+        return blank(v) ? undefined : String(v).trim();
+      }
+      function compare(rec, s) {
+        const deltas = [];
+        for (const f of COMPARE) {
+          if (rec[f] === undefined) continue;
+          const a = sessionVal(s, f);
+          const b = rec[f];
+          if (String(a ?? "") !== String(b ?? "")) deltas.push({ field: f, from: a, to: b });
+        }
+        return deltas;
+      }
+
+      const key = (n) => String(n).trim().toLowerCase();
+
+      function diff(records, sessions, extmap, complete) {
+        const byName = new Map();
+        sessions.forEach((s) => byName.set(key(s.name), s));
+        const added = [],
+          changed = [],
+          unchanged = [],
+          matched = new Set();
+        for (const rec of records) {
+          if (!rec.name) continue;
+          let s = byName.get(key(rec.name));
+          let renamed = false;
+          if (!s && rec.external_id && extmap[rec.external_id]) {
+            s = byName.get(key(extmap[rec.external_id]));
+            if (s) renamed = key(s.name) !== key(rec.name);
+          }
+          if (!s) {
+            added.push(rec);
+            continue;
+          }
+          matched.add(key(s.name));
+          const deltas = compare(rec, s);
+          if (renamed) deltas.unshift({ field: "name", from: s.name, to: rec.name });
+          if (deltas.length) changed.push({ rec, s, deltas, renamed });
+          else unchanged.push({ rec, s });
+        }
+        const missing = complete ? sessions.filter((s) => !matched.has(key(s.name))) : [];
+        return { added, changed, unchanged, missing };
+      }
+
+      // --- Render ---------------------------------------------------------
+      const CAP = 200;
+      function renderList(title, cls, items, fmt) {
+        if (!items.length) return "";
+        const shown = items.slice(0, CAP).map(fmt).join("");
+        const more = items.length > CAP ? `<div class="more">+${items.length - CAP} more…</div>` : "";
+        return `<section><h2>${title} (${items.length})</h2>${shown}${more}</section>`;
+      }
+
+      let current = null,
+        lastFile = null,
+        extmap = {};
+      function render(d) {
+        current = d;
+        document.getElementById("chips").innerHTML = `
+          <span class="chip add"><b>${d.added.length}</b> new</span>
+          <span class="chip chg"><b>${d.changed.length}</b> changed</span>
+          <span class="chip miss"><b>${d.missing.length}</b> missing</span>
+          <span class="chip same"><b>${d.unchanged.length}</b> unchanged</span>`;
+
+        let html = "";
+        html += renderList(
+          "Changed",
+          "chg",
+          d.changed,
+          (c, i) =>
+            `<label class="item sel"><input type="checkbox" class="cbx" data-k="c" data-i="${i}" checked> <span class="nm">${esc(c.s.name)}</span>${
+              c.renamed ? '<span class="renamed-tag">renamed</span>' : ""
+            }<div>${c.deltas
+              .map(
+                (x) =>
+                  `<div class="delta"><span class="f">${esc(x.field)}</span>: <span class="from">${esc(
+                    x.from,
+                  )}</span> → <span class="to">${esc(x.to)}</span></div>`,
+              )
+              .join("")}</div></label>`,
+        );
+        html += renderList(
+          "New devices",
+          "add",
+          d.added,
+          (r, i) =>
+            `<label class="item sel"><input type="checkbox" class="cbx" data-k="a" data-i="${i}"> <span class="nm">${esc(r.name)}</span><div class="hostline">${esc(
+              r.host ?? "",
+            )}${r.port ? ":" + esc(r.port) : ""}</div></label>`,
+        );
+        html += renderList(
+          "Missing",
+          "miss",
+          d.missing,
+          (s) =>
+            `<div class="item"><span class="nm">${esc(s.name)}</span><div class="hostline">${esc(
+              s.host ?? "",
+            )}</div></div>`,
+        );
+        document.getElementById("results").innerHTML = html;
+        renderActions(d);
+      }
+
+      // --- Apply ----------------------------------------------------------
+      function renderActions(d) {
+        const actions = document.getElementById("actions");
+        if (!d || (!d.changed.length && !d.added.length)) {
+          actions.innerHTML = "";
+          return;
+        }
+        actions.innerHTML = `<button class="btn-apply" id="applyBtn">Apply selected changes</button>`;
+        document.getElementById("applyBtn").onclick = showConfirm;
+      }
+
+      function selectedOps() {
+        const updates = [],
+          inserts = [];
+        document.querySelectorAll(".cbx").forEach((cb) => {
+          if (!cb.checked) return;
+          const i = +cb.dataset.i;
+          if (cb.dataset.k === "c") updates.push(buildUpdate(current.changed[i]));
+          else inserts.push(buildInsert(current.added[i]));
+        });
+        return { updates, inserts };
+      }
+
+      function buildUpdate(c) {
+        const op = { id: c.s.id };
+        for (const d of c.deltas) {
+          if (d.field === "name") op.name = d.to;
+          else if (d.field === "host") op.host = d.to;
+          else if (d.field === "port") op.port = Number(d.to);
+          else if (d.field === "username") op.username = d.to;
+          // `kind` is shown in the diff but not auto-applied.
+        }
+        return op;
+      }
+      function buildInsert(r) {
+        const o = { name: r.name, kind: r.kind || "ssh" };
+        for (const k of ["host", "port", "username", "folder_path", "equipment_type", "tags", "notes"])
+          if (r[k] !== undefined) o[k] = r[k];
+        return o;
+      }
+
+      function showConfirm() {
+        const sel = selectedOps();
+        if (!sel.updates.length && !sel.inserts.length) {
+          setStatus("Nothing selected to apply.");
+          return;
+        }
+        document.getElementById("actions").innerHTML =
+          `<div class="confirm-bar">Apply <b>${sel.updates.length}</b> update(s) and add <b>${sel.inserts.length}</b> session(s)? This writes to your saved sessions. <button class="btn-confirm" id="confirmBtn">Confirm</button> <button class="btn-cancel" id="cancelBtn">Cancel</button></div>`;
+        document.getElementById("confirmBtn").onclick = () => doApply(sel);
+        document.getElementById("cancelBtn").onclick = () => renderActions(current);
+      }
+
+      // Learn external_id → current name for every matched record carrying one,
+      // so a later rename still matches by id (stored in plugin-local storage).
+      async function harvest() {
+        const matched = [
+          ...current.changed.map((c) => c.rec),
+          ...current.unchanged.map((u) => u.rec),
+        ];
+        let changed = false;
+        for (const r of matched) {
+          if (r.external_id) {
+            extmap[r.external_id] = r.name;
+            changed = true;
+          }
+        }
+        if (changed) {
+          try {
+            await invoke("storage.set", { key: "extmap", value: JSON.stringify(extmap) });
+          } catch {
+            /* harvest is best-effort */
+          }
+        }
+      }
+
+      async function doApply(sel) {
+        setStatus("Applying…");
+        let res;
+        try {
+          res = await invoke("sessions.bulkApply", { updates: sel.updates, inserts: sel.inserts });
+        } catch (e) {
+          setStatus("Apply failed: " + e.message, true);
+          renderActions(current);
+          return;
+        }
+        await harvest();
+        const errs =
+          res.errors && res.errors.length
+            ? ` — ${res.errors.length} error(s): ${res.errors.slice(0, 3).join("; ")}`
+            : "";
+        setStatus(`Applied ${res.updated} update(s), ${res.inserted} new${errs}. Re-checking…`);
+        if (lastFile) run(lastFile);
+        else renderActions(current);
+      }
+
+      // --- Drive ----------------------------------------------------------
+      const statusEl = document.getElementById("status");
+      function setStatus(msg, err) {
+        statusEl.className = err ? "status err" : "status";
+        statusEl.textContent = msg;
+      }
+
+      async function run(file) {
+        lastFile = file;
+        setStatus("Reading file…");
+        const text = await file.text();
+        let records;
+        try {
+          const isJson = file.name.toLowerCase().endsWith(".json") || text.trim().startsWith("[") || text.trim().startsWith("{");
+          records = (isJson ? recordsFromJSON(text) : recordsFromCSV(text)).map(normalize);
+        } catch (e) {
+          setStatus("Could not parse file: " + e.message, true);
+          return;
+        }
+        const named = records.filter((r) => r.name);
+        if (!named.length) {
+          setStatus("No rows with a `name` were found.", true);
+          return;
+        }
+        setStatus("Loading saved sessions…");
+        let sessions;
+        try {
+          sessions = await invoke("session.list");
+        } catch (e) {
+          setStatus("session.list failed: " + e.message, true);
+          return;
+        }
+        try {
+          const g = await invoke("storage.get", { key: "extmap" });
+          extmap = g && g.value ? JSON.parse(g.value) : {};
+        } catch {
+          /* extmap is optional; absent on first run */
+        }
+        const complete = document.getElementById("complete").checked;
+        const d = diff(named, sessions, extmap, complete);
+        setStatus(`Compared ${named.length} record(s) against ${sessions.length} session(s).`);
+        render(d);
+      }
+
+      document.getElementById("file").addEventListener("change", (e) => {
+        const f = e.currentTarget.files && e.currentTarget.files[0];
+        if (f) run(f);
+      });
+      document.getElementById("complete").addEventListener("change", () => {
+        const f = document.getElementById("file").files;
+        if (f && f[0]) run(f[0]);
+      });
+    </script>
+  </body>
+</html>

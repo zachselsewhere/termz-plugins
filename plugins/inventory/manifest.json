@@ -1,0 +1,9 @@
+{
+  "id": "inventory",
+  "name": "Inventory true-up",
+  "version": "0.1.0",
+  "author": "TermZ",
+  "description": "Diff a CSV/JSON device inventory against your saved sessions: see what's new, what changed (IP/hostname/etc.), and what's missing, then apply selected changes.",
+  "capabilities": ["session.list", "sessions.bulkApply", "storage.get", "storage.set"],
+  "entry": "index.html"
+}

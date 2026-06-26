@@ -1,0 +1,9 @@
+{
+  "id": "hello",
+  "name": "Hello Plugin",
+  "version": "0.1.0",
+  "author": "TermZ",
+  "description": "SDK smoke-test: exercises storage.get/set and session.meta over the capability broker.",
+  "capabilities": ["storage.get", "storage.set", "session.meta"],
+  "entry": "index.html"
+}
