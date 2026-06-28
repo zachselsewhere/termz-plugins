@@ -2,14 +2,6 @@
   "version": 1,
   "plugins": [
     {
-      "id": "hello",
-      "name": "Hello Plugin",
-      "description": "SDK smoke-test: exercises storage.get/set and session.meta over the capability broker.",
-      "version": "0.1.0",
-      "official": true,
-      "manifest": "plugins/hello/manifest.json"
-    },
-    {
       "id": "inventory",
       "name": "Inventory true-up",
       "description": "Diff a CSV/JSON device inventory against your saved sessions: see what's new, what changed (IP/hostname/etc.), and what's missing, then apply selected changes.",
