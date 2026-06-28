@@ -1,12 +1,16 @@
 # TermZ plugin registry
 
-The curated plugin store for [TermZ](https://termz.app). TermZ fetches
-`registry.json` from this repo and shows it in the in-app store. Point the app's
-`DEFAULT_REGISTRY_URL` at the raw URL of `registry.json` on the `main` branch:
+The curated plugin store for [TermZ](https://termz.app). This repo is the
+**source**; the app does not fetch from here directly. On push to `main`, CI
+publishes the store to the distribution host (Cloudflare R2), which is what the
+app's `DEFAULT_REGISTRY_URL` points at:
 
 ```
-https://raw.githubusercontent.com/zachselsewhere/termz-plugins/main/registry.json
+https://dl.termz.app/plugins/registry.json
 ```
+
+So this repo can be private — only the published bundles + index are public on
+the dist host. See **[Publishing to the dist host](#publishing-to-the-dist-host)**.
 
 ## Hybrid model (two tiers)
 
@@ -72,6 +76,29 @@ tools/verify-signatures.sh verifies every present signature (used by CI)
 
 The `author` and `min_app_version` fields are surfaced in the store (author line
 + a compatibility check against the user's TermZ version).
+
+## Publishing to the dist host
+
+`.github/workflows/publish-r2.yml` runs on every push to `main`. It re-checks
+the index + signatures, then syncs to Cloudflare R2:
+
+```
+registry.json            → s3://$R2_BUCKET/plugins/registry.json   → dl.termz.app/plugins/registry.json
+plugins/<id>/…           → s3://$R2_BUCKET/plugins/plugins/<id>/…  → dl.termz.app/plugins/plugins/<id>/…
+```
+
+The doubled `plugins/` is intentional: the app resolves a manifest field like
+`plugins/<id>/manifest.json` relative to the registry URL's directory
+(`dl.termz.app/plugins/`), so the bundles must sit one level under it. It's
+never user-visible.
+
+Required repo secrets (the same R2 token used by the app repo's
+`publish-dist.yml`): `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
+`R2_SECRET_ACCESS_KEY`, `R2_BUCKET`. Without them the workflow is a no-op, so the
+repo works before R2 exists. Full R2 setup: the app repo's `docs/DISTRIBUTION.md`.
+
+Community plugins live in their authors' own repos, so only their `registry.json`
+entry is published here — not their code.
 
 ## Official signing (maintainer only)
 
