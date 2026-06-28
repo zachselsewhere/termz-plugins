@@ -7,6 +7,9 @@
       "description": "Diff a CSV/JSON device inventory against your saved sessions: see what's new, what changed (IP/hostname/etc.), and what's missing, then apply selected changes.",
       "version": "0.1.0",
       "official": true,
+      "author": "TermZ",
+      "min_app_version": null,
+      "manifest_version": null,
       "manifest": "plugins/inventory/manifest.json"
     }
   ]
