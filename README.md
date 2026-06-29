@@ -110,9 +110,19 @@ SIGNING_KEY=/path/to/termz-signing-key.pem tools/sign-plugin.sh plugins/<id>
 node tools/build-registry.mjs
 ```
 
+`sign-plugin.sh` first runs `stamp-files.mjs`, which writes a `files[]` list
+(path + sha256 for every bundle file) into `manifest.json`, **then** signs the
+result — so the integrity list is covered by the signature. This list is
+required for **remote install**: the app fetches exactly those files from the
+dist host and verifies each hash. (Local/dev install copies the whole dir and
+doesn't need it, which is why an unstamped bundle installs locally but is
+rejected over the network with "remote install requires a `files` list".)
+
 The matching public key (`keys/termz-official.pub`) is committed here and
 embedded in the app, so the signature is verified at install and on every
-scan. Editing a signed manifest invalidates its signature until re-signed.
+scan. Editing a signed manifest (including re-stamping) invalidates its
+signature until re-signed; `verify-signatures.sh` / CI catch a stale `.sig`
+before it can publish.
 
 ## Trust model
 
