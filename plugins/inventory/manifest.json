@@ -4,6 +4,21 @@
   "version": "0.1.0",
   "author": "TermZ",
   "description": "Diff a CSV/JSON device inventory against your saved sessions: see what's new, what changed (IP/hostname/etc.), and what's missing, then apply selected changes.",
-  "capabilities": ["session.list", "sessions.bulkApply", "storage.get", "storage.set"],
-  "entry": "index.html"
+  "capabilities": [
+    "session.list",
+    "sessions.bulkApply",
+    "storage.get",
+    "storage.set"
+  ],
+  "entry": "index.html",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "87ad384c2c60d2be1044042799d639e9b2de1597999c9227544d1e8b3bd65b1d"
+    },
+    {
+      "path": "index.html",
+      "sha256": "e212e0e43ae7bf7e30f36d6e4890b66f180e21968869d56f3f49cd6f33c6f01c"
+    }
+  ]
 }
